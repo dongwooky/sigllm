@@ -84,22 +84,86 @@ def main():
     pipeline_name = 'gpt_detector'
     pipeline = MLPipeline(pipeline_name)
     
-    # Set hyperparameters for GPT
-    hyperparameters = {
-        "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
-            "interval": 3600  # 1 hour aggregation
-        },
-        "sigllm.primitives.forecasting.gpt.GPT#1": {
-            "name": "gpt-3.5-turbo",  # You can change to "gpt-4" for better performance
-            "samples": 1,  # Reduce samples to control API costs
-            "temp": 0.1,   # Low temperature for more deterministic results
-            "steps": 5     # Number of forecast steps
-        },
-        "sigllm.primitives.transformation.format_as_integer#1": {
-            "trunc": 1,
-            "errors": "coerce"
+    # Performance mode selection
+    print("🎛️ Select performance mode:")
+    print("1. 🚀 High Performance (GPT-4, more accurate but expensive)")
+    print("2. 💰 Economy Mode (GPT-3.5-turbo, faster and cheaper)")
+    print("3. 🔧 Custom Settings")
+    
+    mode = input("Choose mode (1/2/3): ").strip()
+    
+    if mode == "1":
+        print("🚀 Using High Performance mode with GPT-4")
+        hyperparameters = {
+            "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
+                "interval": 1800  # 30 min aggregation (more granular)
+            },
+            "sigllm.primitives.forecasting.gpt.GPT#1": {
+                "name": "gpt-4",          # Best model for accuracy
+                "samples": 3,             # More samples for stability
+                "temp": 0.3,              # Balanced creativity
+                "steps": 10               # Longer prediction horizon
+            },
+            "sigllm.primitives.transformation.format_as_integer#1": {
+                "trunc": 1,
+                "errors": "coerce"
+            },
+            "orion.primitives.timeseries_anomalies.find_anomalies#1": {
+                "fixed_threshold": False,      # Dynamic threshold
+                "window_size_portion": 0.1,    # More sensitive detection
+                "window_step_size_portion": 0.05
+            }
         }
-    }
+    elif mode == "3":
+        print("🔧 Custom Settings mode")
+        model_name = input("GPT model (gpt-3.5-turbo/gpt-4) [gpt-4]: ").strip() or "gpt-4"
+        samples = int(input("Number of samples [3]: ").strip() or "3")
+        temp = float(input("Temperature (0.0-1.0) [0.3]: ").strip() or "0.3")
+        steps = int(input("Forecast steps [10]: ").strip() or "10")
+        interval = int(input("Time interval in seconds [1800]: ").strip() or "1800")
+        
+        hyperparameters = {
+            "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
+                "interval": interval
+            },
+            "sigllm.primitives.forecasting.gpt.GPT#1": {
+                "name": model_name,
+                "samples": samples,
+                "temp": temp,
+                "steps": steps
+            },
+            "sigllm.primitives.transformation.format_as_integer#1": {
+                "trunc": 1,
+                "errors": "coerce"
+            },
+            "orion.primitives.timeseries_anomalies.find_anomalies#1": {
+                "fixed_threshold": False,
+                "window_size_portion": 0.1,
+                "window_step_size_portion": 0.05
+            }
+        }
+    else:
+        print("💰 Using Economy mode with GPT-3.5-turbo")
+        hyperparameters = {
+            "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
+                "interval": 3600  # 1 hour aggregation
+            },
+            "sigllm.primitives.forecasting.gpt.GPT#1": {
+                "name": "gpt-3.5-turbo",  # Economical choice
+                "samples": 2,             # Moderate samples
+                "temp": 0.2,              # Slightly more creative
+                "steps": 7                # Medium prediction horizon
+            },
+            "sigllm.primitives.transformation.format_as_integer#1": {
+                "trunc": 1,
+                "errors": "coerce"
+            },
+            "orion.primitives.timeseries_anomalies.find_anomalies#1": {
+                "fixed_threshold": False,      # Dynamic threshold
+                "window_size_portion": 0.2,    # Moderate sensitivity
+                "window_step_size_portion": 0.1
+            }
+        }
     pipeline.set_hyperparameters(hyperparameters)
     
     print(f"Pipeline primitives: {len(pipeline.primitives)}")
@@ -171,7 +235,27 @@ def main():
     print("\n--- Step 5: GPT (OpenAI GPT model) ---")
     print("🚨 WARNING: This step calls OpenAI API and will incur costs!")
     print("Prompts OpenAI GPT model to forecast next steps")
-    print(f"Number of API calls will be: {len(context['X'])}")
+    
+    # Calculate expected costs
+    num_windows = len(context['X'])
+    gpt_params = hyperparameters["sigllm.primitives.forecasting.gpt.GPT#1"]
+    total_calls = num_windows * gpt_params["samples"]
+    model_name = gpt_params["name"]
+    
+    print(f"📊 API Call Estimates:")
+    print(f"   • Windows: {num_windows}")
+    print(f"   • Samples per window: {gpt_params['samples']}")
+    print(f"   • Total API calls: {total_calls}")
+    print(f"   • Model: {model_name}")
+    
+    if "gpt-4" in model_name:
+        estimated_cost = total_calls * 0.03  # Rough estimate for GPT-4
+        print(f"   • Estimated cost: ~${estimated_cost:.2f}")
+    else:
+        estimated_cost = total_calls * 0.002  # Rough estimate for GPT-3.5
+        print(f"   • Estimated cost: ~${estimated_cost:.2f}")
+    
+    print("\n💡 TIP: For testing, uncomment the data subset lines above to reduce costs!")
     
     # Ask user confirmation for API calls
     response = input("Continue with GPT API calls? (y/n): ")
