@@ -15,7 +15,7 @@ PROMPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'TEMPLATE
 PROMPTS = json.load(open(PROMPT_PATH))
 
 
-class TogetherAI:
+class TogetherAIOptimized:
     """Optimized Together AI models for faster time series forecasting.
 
     Performance optimizations:
@@ -241,3 +241,41 @@ class TogetherAI:
         print(f"   • Total API calls: {len(X) * self.samples}")
         
         return all_responses
+
+
+# Legacy class name for backward compatibility
+class TogetherAI(TogetherAIOptimized):
+    """Enhanced TogetherAI class with optimizations and backward compatibility."""
+    
+    def __init__(
+        self,
+        name='mistralai/Mistral-7B-Instruct-v0.2',
+        sep=',',
+        steps=1,
+        temp=1,
+        top_p=1,
+        samples=1,
+        max_tokens=50,
+        # New optimization parameters with defaults for backward compatibility
+        max_concurrent=10,
+        batch_size=20,
+        use_async=True,
+        **kwargs
+    ):
+        # Map 'steps' to 'steps' for backward compatibility
+        if 'steps' in kwargs:
+            steps = kwargs.pop('steps')
+        
+        super().__init__(
+            name=name,
+            sep=sep,
+            steps=steps,
+            temp=temp,
+            top_p=top_p,
+            samples=samples,
+            max_tokens=max_tokens,
+            max_concurrent=max_concurrent,
+            batch_size=batch_size,
+            use_async=use_async,
+            **kwargs
+        )
