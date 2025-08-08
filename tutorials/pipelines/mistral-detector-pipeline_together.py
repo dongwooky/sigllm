@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-SigLLM Detector Pipeline - Python Script Version
+SigLLM Detector Pipeline - Python Script Version (Together AI)
 Converted from Jupyter notebook: detector-pipeline.ipynb
 
 This script demonstrates the step-by-step execution of the mistral_detector pipeline
-for time series anomaly detection using Large Language Models.
+for time series anomaly detection using Large Language Models via Together AI.
 
 Requirements:
-- GPU for optimal performance (see mistral documentation for memory requirements)
-- sigllm, orion, mlblocks, matplotlib, pandas, numpy
+- Together AI API key (set as TOGETHER_API_KEY environment variable)
+- sigllm, orion, mlblocks, matplotlib, pandas, numpy, together
 """
 
 import warnings
 warnings.simplefilter('ignore')
 
+import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -21,18 +22,38 @@ from orion.data import load_signal, load_anomalies
 from orion.evaluation import contextual_confusion_matrix
 from mlblocks import MLPipeline
 
+
+# Set Together AI API key from .env file if not already set
+if not os.getenv('TOGETHER_API_KEY'):
+    # Try to load from .env file in current directory
+    env_file = '.env'
+    if os.path.exists(env_file):
+        with open(env_file, 'r') as f:
+            for line in f:
+                if line.startswith('TOGETHER_API_KEY='):
+                    api_key = line.split('=', 1)[1].strip()
+                    os.environ['TOGETHER_API_KEY'] = api_key
+                    print(f"✅ Loaded TOGETHER_API_KEY from .env file")
+                    break
+    
+    if not os.getenv('TOGETHER_API_KEY'):
+        print("Warning: TOGETHER_API_KEY environment variable not set!")
+        print("Please set your Together AI API key: export TOGETHER_API_KEY='your-api-key'")
+        print("You can get an API key from: https://api.together.xyz/")
+        exit(1)
+
 def main():
     """
     Main function to run the complete detector pipeline
     """
-    print("=== SigLLM Detector Pipeline ===")
-    print("This script requires GPU to run optimally.")
-    print("See mistral documentation for memory requirements.\n")
+    print("=== SigLLM Detector Pipeline (Together AI) ===")
+    print("This script uses Together AI API - no local GPU required!")
+    print("Make sure TOGETHER_API_KEY environment variable is set.\n")
     
     # 1. Data Loading
     print("1. Loading data...")
-    # data = load_signal('exchange-2_cpm_results')
-    data = load_signal('F-5-test')
+    data = load_signal('exchange-2_cpm_results')
+    # data = load_signal('F-5-test')
     print(f"Data shape: {data.shape}")
     
     # Quick visualization of the data
@@ -53,16 +74,18 @@ def main():
     
     # 2. Pipeline Setup
     print("\n2. Setting up pipeline...")
-    pipeline_name = 'mistral_detector'
+    pipeline_name = 'mistral_detector_together'
+    print(f"   ✅ Using Together AI pipeline: {pipeline_name}")
     pipeline = MLPipeline(pipeline_name)
     
-    # Set hyperparameters
+    # Set hyperparameters for Together AI pipeline
     hyperparameters = {
         "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
             "interval": 3600
         },
-        "sigllm.primitives.forecasting.huggingface.HF#1": {
-            "samples": 2
+        "sigllm.primitives.forecasting.together_ai.TogetherAI#1": {
+            "samples": 2,
+            "max_tokens": 100
         },
         "sigllm.primitives.transformation.format_as_integer#1": {
             "trunc": 1,
@@ -136,10 +159,10 @@ def main():
     print(f"First sequence (first few values): {first_sequence[:10]}...")
     print("Note: Now string type, ready for LLM input")
     
-    # Step 5: HF (HuggingFace model)
-    print("\n--- Step 5: HF (HuggingFace model) ---")
-    print("Prompts huggingface model to forecast next steps")
-    print("WARNING: This step is time consuming depending on number of windows")
+    # Step 5: TogetherAI model
+    print("\n--- Step 5: TogetherAI model ---")
+    print("Prompts Together AI model to forecast next steps")
+    print("Note: This uses Together AI API instead of local GPU")
     step = 5
     context = pipeline.fit(**context, start_=step, output_=step)
     print(f"Context keys: {list(context.keys())}")
@@ -208,10 +231,10 @@ def main():
     if context['anomalies'] is not None and len(context['anomalies']) > 0:
         # Display anomalies as DataFrame
         anomalies_df = pd.DataFrame(context['anomalies'], columns=['start', 'end', 'score'])
-        print("🎯 Detected Anomalies (by Mistral):")
+        print("🎯 Detected Anomalies (by Mistral via Together AI):")
         print(anomalies_df)
     else:
-        print("🎯 No anomalies detected by Mistral")
+        print("🎯 No anomalies detected by Mistral via Together AI")
         # Create empty DataFrame with correct structure
         anomalies_df = pd.DataFrame(columns=['start', 'end', 'score'])
         print("Created empty anomalies DataFrame for further processing")
@@ -243,7 +266,7 @@ def main():
             f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
             accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
             
-            print("\n=== Mistral Detector Accuracy Metrics ===")
+            print("\n=== Mistral Detector (Together AI) Accuracy Metrics ===")
             print(f"True Positives (TP): {tp}")
             print(f"False Positives (FP): {fp}")
             print(f"False Negatives (FN): {fn}")
@@ -259,7 +282,7 @@ def main():
                 'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy
             }
         else:
-            print("\n=== Mistral Detector Accuracy Metrics ===")
+            print("\n=== Mistral Detector (Together AI) Accuracy Metrics ===")
             print("No anomalies detected - calculating metrics with zero detections")
             # When no anomalies are detected, all ground truth anomalies become false negatives
             tp, fp = 0, 0
@@ -304,7 +327,7 @@ def main():
     # Original plot
     plt.subplot(3, 1, 1)
     plt.plot(index, y, label='original', linewidth=2)
-    plt.plot(index, yhat, label='Mistral forecast', linewidth=2)
+    plt.plot(index, yhat, label='Mistral forecast (Together AI)', linewidth=2)
     plt.plot(index, errors, label='error', linewidth=1, alpha=0.7)
     
     # Mark anomalies
@@ -312,14 +335,14 @@ def main():
         plt.axvspan(*anomalies[0][:2], color='r', alpha=0.2, label='detected anomalies')
     
     plt.legend()
-    plt.title(f'Mistral-based Time Series Anomaly Detection Results (F1: {f1_score:.4f})')
+    plt.title(f'Mistral-based Time Series Anomaly Detection Results via Together AI (F1: {f1_score:.4f})')
     plt.grid(True, alpha=0.3)
     plt.ylabel('Value')
     
     # Zoomed view
     plt.subplot(3, 1, 2)
     plt.plot(index, y, label='original', linewidth=2)
-    plt.plot(index, yhat, label='Mistral forecast', linewidth=2)
+    plt.plot(index, yhat, label='Mistral forecast (Together AI)', linewidth=2)
     plt.plot(index, errors, label='error', linewidth=1, alpha=0.7)
     
     if len(anomalies) > 0:
@@ -340,7 +363,7 @@ def main():
         metric_values = [metrics['precision'], metrics['recall'], metrics['f1'], metrics['accuracy']]
         
         bars = plt.bar(metric_names, metric_values, color=['blue', 'green', 'red', 'orange'])
-        plt.title('Mistral Detector Performance Metrics')
+        plt.title('Mistral Detector (Together AI) Performance Metrics')
         plt.ylabel('Score')
         plt.ylim(0, 1)
         
@@ -357,18 +380,18 @@ def main():
     plt.tight_layout()
     plt.show()
     
-    print("\n=== Mistral Detector Pipeline execution completed successfully! ===")
+    print("\n=== Mistral Detector Pipeline (Together AI) execution completed successfully! ===")
     
     # Print final accuracy summary
     if context.get('accuracy_metrics'):
         metrics = context['accuracy_metrics']
-        print(f"\n=== Final Mistral Detector Accuracy Summary ===")
+        print(f"\n=== Final Mistral Detector (Together AI) Accuracy Summary ===")
         print(f"F1-Score: {metrics['f1']:.4f}")
         print(f"Precision: {metrics['precision']:.4f}")
         print(f"Recall: {metrics['recall']:.4f}")
         print(f"Accuracy: {metrics['accuracy']:.4f}")
     
-    print(f"\n💻 GPU Usage Note: This run used GPU for Mistral model inference")
+    print(f"\n🌐 API Usage Note: This run used Together AI API for Mistral model inference")
     
     return context
 

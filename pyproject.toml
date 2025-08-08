@@ -27,7 +27,8 @@ dependencies = [
     'transformers>=4.44.2',
     'torch>=1.4.0',
     'accelerate>=0.34.2',
-    'sentencepiece>=0.2.0'
+    'sentencepiece>=0.2.0',
+    'together>=1.2.0'
 ]
 
 [project.optional-dependencies]

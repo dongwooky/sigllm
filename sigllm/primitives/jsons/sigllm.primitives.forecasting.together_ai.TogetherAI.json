@@ -1,0 +1,60 @@
+{
+    "name": "sigllm.primitives.forecasting.together_ai.TogetherAI",
+    "contributors": [
+        "AI Assistant"
+    ],
+    "description": "Prompt Together AI models to forecast time series.",
+    "classifiers": {
+        "type": "estimator",
+        "subtype": "regressor"
+    },
+    "modalities": [],
+    "primitive": "sigllm.primitives.forecasting.together_ai.TogetherAI",
+    "produce": {
+        "method": "forecast",
+        "args": [
+            {
+                "name": "X",
+                "type": "ndarray"
+            }
+        ],
+        "output": [
+            {
+                "name": "y",
+                "type": "ndarray"
+            }
+        ]
+    },
+    "hyperparameters": {
+        "fixed": {
+            "name": {
+                "type": "str",
+                "default": "mistralai/Mistral-7B-Instruct-v0.2"
+            },
+            "sep": {
+                "type": "str",
+                "default": ","
+            },
+            "steps": {
+                "type": "int",
+                "default": 1
+            },
+            "temp": {
+                "type": "float",
+                "default": 1
+            },
+            "top_p": {
+                "type": "float",
+                "default": 1
+            },
+            "samples": {
+                "type": "int",
+                "default": 1
+            },
+            "max_tokens": {
+                "type": "int",
+                "default": 50
+            }
+        }
+    }
+}

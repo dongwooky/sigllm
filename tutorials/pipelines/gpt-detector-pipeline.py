@@ -60,7 +60,8 @@ def main():
     
     # 1. Data Loading
     print("\n1. Loading data...")
-    data = load_signal('exchange-2_cpm_results')
+    # data = load_signal('exchange-2_cpm_results')
+    data = load_signal('F-5-test')
     print(f"Data shape: {data.shape}")
     
     # Quick visualization of the data
