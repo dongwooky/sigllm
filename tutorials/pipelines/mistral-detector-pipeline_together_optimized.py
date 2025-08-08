@@ -314,58 +314,163 @@ def main():
         'value': y.flatten() if hasattr(y, 'flatten') else y
     })
     
-    # Calculate accuracy metrics
+    print(f"📊 Debug Info:")
+    print(f"   • eval_data shape: {eval_data.shape}")
+    print(f"   • truth_anomalies: {len(truth_anomalies)} segments")
+    print(f"   • detected anomalies: {len(anomalies_df)} segments")
+    print(f"   • timestamp range: {eval_data['timestamp'].min()} to {eval_data['timestamp'].max()}")
+    
+    # Calculate accuracy metrics using BOTH Orion evaluation methods
     try:
         if len(anomalies_df) > 0:
-            tp, fp, fn, tn = contextual_confusion_matrix(truth_anomalies, anomalies_df, eval_data)
+            from orion.evaluation.contextual import contextual_f1_score, contextual_precision, contextual_recall, contextual_accuracy
             
-            # Calculate metrics
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-            accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
+            print("\n🔍 === COMPARISON: Two Orion Evaluation Methods ===")
             
-            print("\n=== Optimized Mistral Detector (Together AI) Accuracy Metrics ===")
-            print(f"True Positives (TP): {tp}")
-            print(f"False Positives (FP): {fp}")
-            print(f"False Negatives (FN): {fn}")
-            print(f"True Negatives (TN): {tn}")
-            print(f"Precision: {precision:.4f}")
-            print(f"Recall: {recall:.4f}")
-            print(f"F1-Score: {f1:.4f}")
-            print(f"Accuracy: {accuracy:.4f}")
+            # Method 1: Point-based Weighted Evaluation (Orion Default)
+            print("\n📊 Method 1: Point-based Weighted Evaluation (weighted=True)")
+            print("   → Evaluates each individual data point with weights")
             
-            # Store metrics in context for later use
+            tp1, fp1, fn1, tn1 = contextual_confusion_matrix(
+                truth_anomalies, anomalies_df, eval_data, weighted=True
+            )
+            
+            # Use Orion's built-in functions for consistency
+            precision1 = contextual_precision(truth_anomalies, anomalies_df, eval_data, weighted=True)
+            recall1 = contextual_recall(truth_anomalies, anomalies_df, eval_data, weighted=True)
+            f1_1 = contextual_f1_score(truth_anomalies, anomalies_df, eval_data, weighted=True)
+            accuracy1 = contextual_accuracy(truth_anomalies, anomalies_df, eval_data, weighted=True)
+            
+            print(f"   True Positives (TP): {tp1}")
+            print(f"   False Positives (FP): {fp1}")
+            print(f"   False Negatives (FN): {fn1}")
+            print(f"   True Negatives (TN): {tn1}")
+            print(f"   Precision: {precision1:.4f}")
+            print(f"   Recall: {recall1:.4f}")
+            print(f"   F1-Score: {f1_1:.4f}")
+            print(f"   Accuracy: {accuracy1:.4f}")
+            
+            # Method 2: Segment-based Overlap Evaluation (Recommended for Time Series)
+            print("\n🎯 Method 2: Segment-based Overlap Evaluation (weighted=False)")
+            print("   → Evaluates anomaly segments based on overlap")
+            
+            tp2, fp2, fn2, tn2 = contextual_confusion_matrix(
+                truth_anomalies, anomalies_df, eval_data, weighted=False
+            )
+            
+            precision2 = contextual_precision(truth_anomalies, anomalies_df, eval_data, weighted=False)
+            recall2 = contextual_recall(truth_anomalies, anomalies_df, eval_data, weighted=False)
+            f1_2 = contextual_f1_score(truth_anomalies, anomalies_df, eval_data, weighted=False)
+            accuracy2 = contextual_accuracy(truth_anomalies, anomalies_df, eval_data, weighted=False)
+            
+            print(f"   True Positives (TP): {tp2}")
+            print(f"   False Positives (FP): {fp2}")
+            print(f"   False Negatives (FN): {fn2}")
+            print(f"   True Negatives (TN): {tn2}")
+            print(f"   Precision: {precision2:.4f}")
+            print(f"   Recall: {recall2:.4f}")
+            print(f"   F1-Score: {f1_2:.4f}")
+            print(f"   Accuracy: {accuracy2:.4f}")
+            
+            # Summary comparison
+            print("\n📈 === EVALUATION METHODS COMPARISON ===")
+            print(f"{'Metric':<12} {'Point-based':<12} {'Segment-based':<14} {'Difference':<12}")
+            print("-" * 52)
+            print(f"{'Precision':<12} {precision1:<12.4f} {precision2:<14.4f} {abs(precision1-precision2):<12.4f}")
+            print(f"{'Recall':<12} {recall1:<12.4f} {recall2:<14.4f} {abs(recall1-recall2):<12.4f}")
+            print(f"{'F1-Score':<12} {f1_1:<12.4f} {f1_2:<14.4f} {abs(f1_1-f1_2):<12.4f}")
+            print(f"{'Accuracy':<12} {accuracy1:<12.4f} {accuracy2:<14.4f} {abs(accuracy1-accuracy2):<12.4f}")
+            
+            print("\n💡 Interpretation:")
+            print("   • Point-based: More granular, considers individual data points")
+            print("   • Segment-based: More intuitive for time series anomaly detection")
+            print("   • For time series, segment-based is usually preferred")
+            
+            # Store both sets of metrics in context
             context['accuracy_metrics'] = {
-                'tp': tp, 'fp': fp, 'fn': fn, 'tn': tn,
-                'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy
+                'point_based': {
+                    'tp': tp1, 'fp': fp1, 'fn': fn1, 'tn': tn1,
+                    'precision': precision1, 'recall': recall1, 'f1': f1_1, 'accuracy': accuracy1
+                },
+                'segment_based': {
+                    'tp': tp2, 'fp': fp2, 'fn': fn2, 'tn': tn2,
+                    'precision': precision2, 'recall': recall2, 'f1': f1_2, 'accuracy': accuracy2
+                }
             }
+            
+            # Use segment-based metrics as primary for visualization (more appropriate for time series)
+            tp, fp, fn, tn = tp2, fp2, fn2, tn2
+            precision, recall, f1, accuracy = precision2, recall2, f1_2, accuracy2
         else:
-            print("\n=== Optimized Mistral Detector (Together AI) Accuracy Metrics ===")
-            print("No anomalies detected - calculating metrics with zero detections")
-            # When no anomalies are detected, all ground truth anomalies become false negatives
-            tp, fp = 0, 0
-            fn = len(truth_anomalies)
-            tn = len(eval_data) - fn  # Approximate, should be calculated properly
+            from orion.evaluation.contextual import contextual_f1_score, contextual_precision, contextual_recall, contextual_accuracy
             
-            precision = 0.0  # No detections means no precision
-            recall = 0.0     # No detections means no recall
-            f1 = 0.0
-            accuracy = tn / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
+            print("\n🔍 === COMPARISON: Two Orion Evaluation Methods (No Detections) ===")
             
-            print(f"True Positives (TP): {tp}")
-            print(f"False Positives (FP): {fp}")
-            print(f"False Negatives (FN): {fn}")
-            print(f"True Negatives (TN): {tn}")
-            print(f"Precision: {precision:.4f}")
-            print(f"Recall: {recall:.4f}")
-            print(f"F1-Score: {f1:.4f}")
-            print(f"Accuracy: {accuracy:.4f}")
+            # Empty detection DataFrame
+            empty_detections = pd.DataFrame(columns=['start', 'end', 'score'])
             
+            # Method 1: Point-based Weighted Evaluation
+            print("\n📊 Method 1: Point-based Weighted Evaluation (weighted=True)")
+            tp1, fp1, fn1, tn1 = contextual_confusion_matrix(
+                truth_anomalies, empty_detections, eval_data, weighted=True
+            )
+            precision1 = contextual_precision(truth_anomalies, empty_detections, eval_data, weighted=True)
+            recall1 = contextual_recall(truth_anomalies, empty_detections, eval_data, weighted=True)
+            f1_1 = contextual_f1_score(truth_anomalies, empty_detections, eval_data, weighted=True)
+            accuracy1 = contextual_accuracy(truth_anomalies, empty_detections, eval_data, weighted=True)
+            
+            print(f"   True Positives (TP): {tp1}")
+            print(f"   False Positives (FP): {fp1}")
+            print(f"   False Negatives (FN): {fn1}")
+            print(f"   True Negatives (TN): {tn1}")
+            print(f"   Precision: {precision1:.4f}")
+            print(f"   Recall: {recall1:.4f}")
+            print(f"   F1-Score: {f1_1:.4f}")
+            print(f"   Accuracy: {accuracy1:.4f}")
+            
+            # Method 2: Segment-based Overlap Evaluation
+            print("\n🎯 Method 2: Segment-based Overlap Evaluation (weighted=False)")
+            tp2, fp2, fn2, tn2 = contextual_confusion_matrix(
+                truth_anomalies, empty_detections, eval_data, weighted=False
+            )
+            precision2 = contextual_precision(truth_anomalies, empty_detections, eval_data, weighted=False)
+            recall2 = contextual_recall(truth_anomalies, empty_detections, eval_data, weighted=False)
+            f1_2 = contextual_f1_score(truth_anomalies, empty_detections, eval_data, weighted=False)
+            accuracy2 = contextual_accuracy(truth_anomalies, empty_detections, eval_data, weighted=False)
+            
+            print(f"   True Positives (TP): {tp2}")
+            print(f"   False Positives (FP): {fp2}")
+            print(f"   False Negatives (FN): {fn2}")
+            print(f"   True Negatives (TN): {tn2}")
+            print(f"   Precision: {precision2:.4f}")
+            print(f"   Recall: {recall2:.4f}")
+            print(f"   F1-Score: {f1_2:.4f}")
+            print(f"   Accuracy: {accuracy2:.4f}")
+            
+            # Summary comparison for no detections
+            print("\n📈 === EVALUATION METHODS COMPARISON (No Detections) ===")
+            print(f"{'Metric':<12} {'Point-based':<12} {'Segment-based':<14} {'Difference':<12}")
+            print("-" * 52)
+            print(f"{'Precision':<12} {precision1:<12.4f} {precision2:<14.4f} {abs(precision1-precision2):<12.4f}")
+            print(f"{'Recall':<12} {recall1:<12.4f} {recall2:<14.4f} {abs(recall1-recall2):<12.4f}")
+            print(f"{'F1-Score':<12} {f1_1:<12.4f} {f1_2:<14.4f} {abs(f1_1-f1_2):<12.4f}")
+            print(f"{'Accuracy':<12} {accuracy1:<12.4f} {accuracy2:<14.4f} {abs(accuracy1-accuracy2):<12.4f}")
+            
+            # Store both sets of metrics
             context['accuracy_metrics'] = {
-                'tp': tp, 'fp': fp, 'fn': fn, 'tn': tn,
-                'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy
+                'point_based': {
+                    'tp': tp1, 'fp': fp1, 'fn': fn1, 'tn': tn1,
+                    'precision': precision1, 'recall': recall1, 'f1': f1_1, 'accuracy': accuracy1
+                },
+                'segment_based': {
+                    'tp': tp2, 'fp': fp2, 'fn': fn2, 'tn': tn2,
+                    'precision': precision2, 'recall': recall2, 'f1': f1_2, 'accuracy': accuracy2
+                }
             }
+            
+            # Use segment-based metrics as primary for visualization
+            tp, fp, fn, tn = tp2, fp2, fn2, tn2
+            precision, recall, f1, accuracy = precision2, recall2, f1_2, accuracy2
         
     except Exception as e:
         print(f"Accuracy calculation failed: {e}")
@@ -414,22 +519,58 @@ def main():
     plt.grid(True, alpha=0.3)
     plt.ylabel('Value')
     
-    # Accuracy metrics visualization
+    # Accuracy metrics visualization - Compare both methods
     plt.subplot(3, 1, 3)
     if context.get('accuracy_metrics'):
         metrics = context['accuracy_metrics']
-        metric_names = ['Precision', 'Recall', 'F1-Score', 'Accuracy']
-        metric_values = [metrics['precision'], metrics['recall'], metrics['f1'], metrics['accuracy']]
         
-        bars = plt.bar(metric_names, metric_values, color=['blue', 'green', 'red', 'orange'])
-        plt.title('🚀 Optimized Mistral Detector (Together AI) Performance Metrics')
-        plt.ylabel('Score')
-        plt.ylim(0, 1)
-        
-        # Add value labels on bars
-        for bar, value in zip(bars, metric_values):
-            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                    f'{value:.3f}', ha='center', va='bottom')
+        if 'point_based' in metrics and 'segment_based' in metrics:
+            # Both evaluation methods available - show comparison
+            metric_names = ['Precision', 'Recall', 'F1-Score', 'Accuracy']
+            point_values = [metrics['point_based']['precision'], metrics['point_based']['recall'], 
+                           metrics['point_based']['f1'], metrics['point_based']['accuracy']]
+            segment_values = [metrics['segment_based']['precision'], metrics['segment_based']['recall'], 
+                            metrics['segment_based']['f1'], metrics['segment_based']['accuracy']]
+            
+            x = range(len(metric_names))
+            width = 0.35
+            
+            bars1 = plt.bar([i - width/2 for i in x], point_values, width, 
+                           label='Point-based', color='lightblue', alpha=0.8)
+            bars2 = plt.bar([i + width/2 for i in x], segment_values, width, 
+                           label='Segment-based', color='orange', alpha=0.8)
+            
+            plt.title('🚀 Optimized Mistral Detector: Orion Evaluation Methods Comparison')
+            plt.ylabel('Score')
+            plt.ylim(0, 1)
+            plt.xticks(x, metric_names)
+            plt.legend()
+            
+            # Add value labels on bars
+            for bars in [bars1, bars2]:
+                for bar in bars:
+                    height = bar.get_height()
+                    plt.text(bar.get_x() + bar.get_width()/2, height + 0.01, 
+                            f'{height:.3f}', ha='center', va='bottom', fontsize=8)
+        else:
+            # Fallback to single method
+            if 'segment_based' in metrics:
+                m = metrics['segment_based']
+            else:
+                m = metrics
+            
+            metric_names = ['Precision', 'Recall', 'F1-Score', 'Accuracy']
+            metric_values = [m.get('precision', 0), m.get('recall', 0), m.get('f1', 0), m.get('accuracy', 0)]
+            
+            bars = plt.bar(metric_names, metric_values, color=['blue', 'green', 'red', 'orange'])
+            plt.title('🚀 Optimized Mistral Detector Performance Metrics')
+            plt.ylabel('Score')
+            plt.ylim(0, 1)
+            
+            # Add value labels on bars
+            for bar, value in zip(bars, metric_values):
+                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
+                        f'{value:.3f}', ha='center', va='bottom')
     else:
         plt.text(0.5, 0.5, 'Accuracy metrics not available', 
                 ha='center', va='center', transform=plt.gca().transAxes)
@@ -444,14 +585,43 @@ def main():
     print(f"\n=== 🚀 OPTIMIZED Mistral Detector Pipeline (Together AI) execution completed! ===")
     print(f"⏱️  Total execution time: {total_time:.2f} seconds")
     
-    # Print final accuracy summary
+    # Print final accuracy summary for both methods
     if context.get('accuracy_metrics'):
         metrics = context['accuracy_metrics']
-        print(f"\n=== Final Optimized Mistral Detector (Together AI) Summary ===")
-        print(f"F1-Score: {metrics['f1']:.4f}")
-        print(f"Precision: {metrics['precision']:.4f}")
-        print(f"Recall: {metrics['recall']:.4f}")
-        print(f"Accuracy: {metrics['accuracy']:.4f}")
+        print(f"\n=== 📊 Final Optimized Mistral Detector (Together AI) Accuracy Summary ===")
+        
+        if 'point_based' in metrics and 'segment_based' in metrics:
+            print("\n🔍 Point-based Weighted Evaluation:")
+            pb = metrics['point_based']
+            print(f"   F1-Score: {pb['f1']:.4f}")
+            print(f"   Precision: {pb['precision']:.4f}")
+            print(f"   Recall: {pb['recall']:.4f}")
+            print(f"   Accuracy: {pb['accuracy']:.4f}")
+            
+            print("\n🎯 Segment-based Overlap Evaluation (Recommended):")
+            sb = metrics['segment_based']
+            print(f"   F1-Score: {sb['f1']:.4f}")
+            print(f"   Precision: {sb['precision']:.4f}")
+            print(f"   Recall: {sb['recall']:.4f}")
+            print(f"   Accuracy: {sb['accuracy']:.4f}")
+            
+            print(f"\n💡 Evaluation Methods Difference:")
+            print(f"   F1-Score difference: {abs(pb['f1'] - sb['f1']):.4f}")
+            print(f"   Primary metric (Segment-based F1): {sb['f1']:.4f}")
+        else:
+            # Fallback for single method
+            if 'segment_based' in metrics:
+                m = metrics['segment_based']
+                method_name = "Segment-based"
+            else:
+                m = metrics
+                method_name = "Standard"
+            
+            print(f"\n{method_name} Evaluation Results:")
+            print(f"   F1-Score: {m.get('f1', 0):.4f}")
+            print(f"   Precision: {m.get('precision', 0):.4f}")
+            print(f"   Recall: {m.get('recall', 0):.4f}")
+            print(f"   Accuracy: {m.get('accuracy', 0):.4f}")
     
     print(f"\n🌐 API Usage Note: This run used OPTIMIZED Together AI API calls")
     print(f"🚀 Performance improvements: Async/parallel processing, batch optimization")
