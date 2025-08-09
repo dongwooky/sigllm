@@ -91,16 +91,17 @@ def main():
     # OPTIMIZED hyperparameters for better performance
     hyperparameters = {
         "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
-            "interval": 3600
+            "interval": 3600 #기본
+            # "interval": 21600 #NASA
         },
         "sigllm.primitives.forecasting.together_ai.TogetherAI#1": {
             "samples": 1,  # Reduced from 2 to 1 for 2x speed improvement
-            "max_tokens": 50,  # Optimized token count
-            "temp": 0.7,  # Slightly lower for more consistent results
+            "max_tokens": 20,  # REDUCED: 30 → 20 (minimal tokens for anomaly detection)
+            "temp": 0.1,  # REDUCED: 0.7 → 0.1 (more deterministic = faster generation)
             "top_p": 0.9,  # Optimized for speed
-            "max_concurrent": 10,  # NEW: Enable parallel processing
-            "batch_size": 20,  # NEW: Batch processing
-            "use_async": True,  # NEW: Enable async processing
+            "max_concurrent": 20,  # INCREASED: 15 → 20 (even more parallel processing)
+            "batch_size": 100,  # INCREASED: 50 → 75 (larger batches = fewer API calls)
+            "use_async": True,  # Enable async processing for maximum speed
         },
         "sigllm.primitives.transformation.format_as_integer#1": {
             "trunc": 1,
@@ -298,8 +299,8 @@ def main():
         anomalies_df = pd.DataFrame(columns=['start', 'end', 'score'])
         print("Created empty anomalies DataFrame for further processing")
     
-    # 4.5. Accuracy Evaluation
-    print("\n4.5. Accuracy Evaluation...")
+    # 4.5. Performance Evaluation
+    print("\n4.5. Performance Evaluation...")
     
     # Load ground truth anomalies
     truth_anomalies = load_anomalies('exchange-2_cpm_results')
@@ -320,26 +321,142 @@ def main():
     print(f"   • detected anomalies: {len(anomalies_df)} segments")
     print(f"   • timestamp range: {eval_data['timestamp'].min()} to {eval_data['timestamp'].max()}")
     
-    # Calculate accuracy metrics using BOTH Orion evaluation methods
+    # Pure F1 Score calculation (point-level)
+    print(f"\n=== 🧮 Pure F1 Score Calculation (Point-level) ===")
+    try:
+        # Create binary labels for each timestamp
+        timestamps = eval_data['timestamp'].values
+        gt_labels = np.zeros(len(timestamps), dtype=int)
+        detected_labels = np.zeros(len(timestamps), dtype=int)
+        
+        # Mark ground truth anomalies
+        for _, row in truth_anomalies.iterrows():
+            mask = (timestamps >= row['start']) & (timestamps <= row['end'])
+            gt_labels[mask] = 1
+        
+        # Mark detected anomalies  
+        for _, row in anomalies_df.iterrows():
+            mask = (timestamps >= row['start']) & (timestamps <= row['end'])
+            detected_labels[mask] = 1
+        
+        # Calculate confusion matrix
+        tp_pure = np.sum((gt_labels == 1) & (detected_labels == 1))
+        fp_pure = np.sum((gt_labels == 0) & (detected_labels == 1))
+        fn_pure = np.sum((gt_labels == 1) & (detected_labels == 0))
+        tn_pure = np.sum((gt_labels == 0) & (detected_labels == 0))
+        
+        # Calculate metrics
+        precision_pure = tp_pure / (tp_pure + fp_pure) if (tp_pure + fp_pure) > 0 else 0
+        recall_pure = tp_pure / (tp_pure + fn_pure) if (tp_pure + fn_pure) > 0 else 0
+        f1_pure = 2 * precision_pure * recall_pure / (precision_pure + recall_pure) if (precision_pure + recall_pure) > 0 else 0
+        accuracy_pure = (tp_pure + tn_pure) / (tp_pure + tn_pure + fp_pure + fn_pure)
+        
+        print(f"📊 Point-level Analysis:")
+        print(f"   • Total GT anomaly points: {np.sum(gt_labels)}")
+        print(f"   • Total detected anomaly points: {np.sum(detected_labels)}")
+        print(f"   • Total data points: {len(timestamps)}")
+        
+        print(f"\n🔍 Pure Confusion Matrix:")
+        print(f"   True Positives (TP): {tp_pure}")
+        print(f"   False Positives (FP): {fp_pure}")  
+        print(f"   False Negatives (FN): {fn_pure}")
+        print(f"   True Negatives (TN): {tn_pure}")
+        
+        print(f"\n✨ Pure Metrics:")
+        print(f"   Precision: {precision_pure:.4f} ({tp_pure}/{tp_pure + fp_pure})")
+        print(f"   Recall: {recall_pure:.4f} ({tp_pure}/{tp_pure + fn_pure})")
+        print(f"   F1-Score: {f1_pure:.4f}")
+        print(f"   Accuracy: {accuracy_pure:.4f}")
+        
+        print(f"\n💡 Pure Interpretation:")
+        print(f"   • {tp_pure} points correctly detected as anomalies")
+        print(f"   • {fn_pure} anomaly points missed")
+        print(f"   • {fp_pure} points incorrectly flagged as anomalies")
+        print(f"   • {recall_pure:.1%} of all anomaly points detected")
+        
+    except Exception as e:
+        print(f"❌ Pure F1 calculation failed: {e}")
+    
+    # Pure Segment-based evaluation
+    print(f"\n=== 🎯 Pure Segment-based Evaluation ===")
+    try:
+        print(f"📊 Segment Analysis:")
+        print(f"   • Ground Truth segments: {len(truth_anomalies)}")
+        print(f"   • Detected segments: {len(anomalies_df)}")
+        
+        # Calculate segment-level overlaps
+        gt_matched = set()  # Track which GT segments have been matched
+        det_matched = set()  # Track which detected segments have been matched
+        
+        overlaps = []
+        for gt_idx, gt_row in truth_anomalies.iterrows():
+            for det_idx, det_row in anomalies_df.iterrows():
+                # Calculate overlap
+                overlap_start = max(gt_row['start'], det_row['start'])
+                overlap_end = min(gt_row['end'], det_row['end'])
+                overlap_length = max(0, overlap_end - overlap_start)
+                
+                if overlap_length > 0:
+                    # Calculate overlap percentage
+                    gt_length = gt_row['end'] - gt_row['start']
+                    det_length = det_row['end'] - det_row['start']
+                    overlap_ratio_gt = overlap_length / gt_length
+                    overlap_ratio_det = overlap_length / det_length
+                    
+                    overlaps.append({
+                        'gt_idx': gt_idx,
+                        'det_idx': det_idx,
+                        'overlap_length': overlap_length,
+                        'overlap_ratio_gt': overlap_ratio_gt,
+                        'overlap_ratio_det': overlap_ratio_det
+                    })
+                    
+                    # Consider as matched if overlap is significant (>= 10%)
+                    if overlap_ratio_gt >= 0.1 or overlap_ratio_det >= 0.1:
+                        gt_matched.add(gt_idx)
+                        det_matched.add(det_idx)
+        
+        # Calculate pure segment metrics
+        tp_seg = len(gt_matched)  # GT segments that were successfully detected
+        fn_seg = len(truth_anomalies) - len(gt_matched)  # GT segments that were missed
+        fp_seg = len(anomalies_df) - len(det_matched)  # Detected segments that don't match GT
+        
+        # Calculate metrics
+        precision_seg = tp_seg / len(anomalies_df) if len(anomalies_df) > 0 else 0
+        recall_seg = tp_seg / len(truth_anomalies) if len(truth_anomalies) > 0 else 0
+        f1_seg = 2 * precision_seg * recall_seg / (precision_seg + recall_seg) if (precision_seg + recall_seg) > 0 else 0
+        
+        print(f"\n🔍 Pure Segment Overlap Details:")
+        for i, overlap in enumerate(overlaps):
+            gt_idx = overlap['gt_idx']
+            det_idx = overlap['det_idx']
+            print(f"   Match {i+1}: GT[{gt_idx}] ↔ Det[{det_idx}]")
+            print(f"     • Overlap length: {overlap['overlap_length']}")
+            print(f"     • GT coverage: {overlap['overlap_ratio_gt']:.1%}")
+            print(f"     • Det coverage: {overlap['overlap_ratio_det']:.1%}")
+        
+        
+    except Exception as e:
+        print(f"❌ Pure segment evaluation failed: {e}")
+    
+    # Calculate performance metrics using BOTH Orion evaluation methods
     try:
         if len(anomalies_df) > 0:
-            from orion.evaluation.contextual import contextual_f1_score, contextual_precision, contextual_recall, contextual_accuracy
+            from orion.evaluation.contextual import contextual_f1_score, contextual_precision, contextual_recall
             
             print("\n🔍 === COMPARISON: Two Orion Evaluation Methods ===")
             
-            # Method 1: Point-based Weighted Evaluation (Orion Default)
+            # Method 1: Point-based Weighted Evaluation
             print("\n📊 Method 1: Point-based Weighted Evaluation (weighted=True)")
             print("   → Evaluates each individual data point with weights")
             
-            tp1, fp1, fn1, tn1 = contextual_confusion_matrix(
+            tn1, fp1, fn1, tp1 = contextual_confusion_matrix(
                 truth_anomalies, anomalies_df, eval_data, weighted=True
             )
             
-            # Use Orion's built-in functions for consistency
             precision1 = contextual_precision(truth_anomalies, anomalies_df, eval_data, weighted=True)
             recall1 = contextual_recall(truth_anomalies, anomalies_df, eval_data, weighted=True)
             f1_1 = contextual_f1_score(truth_anomalies, anomalies_df, eval_data, weighted=True)
-            accuracy1 = contextual_accuracy(truth_anomalies, anomalies_df, eval_data, weighted=True)
             
             print(f"   True Positives (TP): {tp1}")
             print(f"   False Positives (FP): {fp1}")
@@ -348,61 +465,45 @@ def main():
             print(f"   Precision: {precision1:.4f}")
             print(f"   Recall: {recall1:.4f}")
             print(f"   F1-Score: {f1_1:.4f}")
-            print(f"   Accuracy: {accuracy1:.4f}")
             
-            # Method 2: Segment-based Overlap Evaluation (Recommended for Time Series)
-            print("\n🎯 Method 2: Segment-based Overlap Evaluation (weighted=False)")
+            
+            # Method 2: Segment-based Non-weighted Evaluation (Recommended for Time Series)
+            print("\n🎯 Method 2: Segment-based Non-weighted Evaluation (weighted=False)")
             print("   → Evaluates anomaly segments based on overlap")
             
-            tp2, fp2, fn2, tn2 = contextual_confusion_matrix(
+            tn2, fp2, fn2, tp2 = contextual_confusion_matrix(
                 truth_anomalies, anomalies_df, eval_data, weighted=False
             )
             
             precision2 = contextual_precision(truth_anomalies, anomalies_df, eval_data, weighted=False)
             recall2 = contextual_recall(truth_anomalies, anomalies_df, eval_data, weighted=False)
             f1_2 = contextual_f1_score(truth_anomalies, anomalies_df, eval_data, weighted=False)
-            accuracy2 = contextual_accuracy(truth_anomalies, anomalies_df, eval_data, weighted=False)
+            # Note: For segment-based evaluation, TN is None (not applicable in segment overlap analysis)
             
-            print(f"   True Positives (TP): {tp2}")
+            print(f"   True Positives (TP): {tp2 if tp2 is not None else 'N/A (segment-based)'}")
             print(f"   False Positives (FP): {fp2}")
             print(f"   False Negatives (FN): {fn2}")
-            print(f"   True Negatives (TN): {tn2}")
+            print(f"   True Negatives (TN): {tn2 if tn2 is not None else 'N/A (segment-based)'}")
             print(f"   Precision: {precision2:.4f}")
             print(f"   Recall: {recall2:.4f}")
             print(f"   F1-Score: {f1_2:.4f}")
-            print(f"   Accuracy: {accuracy2:.4f}")
-            
-            # Summary comparison
-            print("\n📈 === EVALUATION METHODS COMPARISON ===")
-            print(f"{'Metric':<12} {'Point-based':<12} {'Segment-based':<14} {'Difference':<12}")
-            print("-" * 52)
-            print(f"{'Precision':<12} {precision1:<12.4f} {precision2:<14.4f} {abs(precision1-precision2):<12.4f}")
-            print(f"{'Recall':<12} {recall1:<12.4f} {recall2:<14.4f} {abs(recall1-recall2):<12.4f}")
-            print(f"{'F1-Score':<12} {f1_1:<12.4f} {f1_2:<14.4f} {abs(f1_1-f1_2):<12.4f}")
-            print(f"{'Accuracy':<12} {accuracy1:<12.4f} {accuracy2:<14.4f} {abs(accuracy1-accuracy2):<12.4f}")
-            
-            print("\n💡 Interpretation:")
-            print("   • Point-based: More granular, considers individual data points")
-            print("   • Segment-based: More intuitive for time series anomaly detection")
-            print("   • For time series, segment-based is usually preferred")
             
             # Store both sets of metrics in context
-            context['accuracy_metrics'] = {
+            context['evaluation_metrics'] = {
                 'point_based': {
                     'tp': tp1, 'fp': fp1, 'fn': fn1, 'tn': tn1,
-                    'precision': precision1, 'recall': recall1, 'f1': f1_1, 'accuracy': accuracy1
+                    'precision': precision1, 'recall': recall1, 'f1': f1_1
                 },
                 'segment_based': {
                     'tp': tp2, 'fp': fp2, 'fn': fn2, 'tn': tn2,
-                    'precision': precision2, 'recall': recall2, 'f1': f1_2, 'accuracy': accuracy2
+                    'precision': precision2, 'recall': recall2, 'f1': f1_2
                 }
             }
             
-            # Use segment-based metrics as primary for visualization (more appropriate for time series)
-            tp, fp, fn, tn = tp2, fp2, fn2, tn2
-            precision, recall, f1, accuracy = precision2, recall2, f1_2, accuracy2
+            # Use segment-based metrics as primary for visualization (recommended for time series)
+            precision, recall, f1 = precision2, recall2, f1_2
         else:
-            from orion.evaluation.contextual import contextual_f1_score, contextual_precision, contextual_recall, contextual_accuracy
+            from orion.evaluation.contextual import contextual_f1_score, contextual_precision, contextual_recall
             
             print("\n🔍 === COMPARISON: Two Orion Evaluation Methods (No Detections) ===")
             
@@ -411,13 +512,12 @@ def main():
             
             # Method 1: Point-based Weighted Evaluation
             print("\n📊 Method 1: Point-based Weighted Evaluation (weighted=True)")
-            tp1, fp1, fn1, tn1 = contextual_confusion_matrix(
+            tn1, fp1, fn1, tp1 = contextual_confusion_matrix(
                 truth_anomalies, empty_detections, eval_data, weighted=True
             )
             precision1 = contextual_precision(truth_anomalies, empty_detections, eval_data, weighted=True)
             recall1 = contextual_recall(truth_anomalies, empty_detections, eval_data, weighted=True)
             f1_1 = contextual_f1_score(truth_anomalies, empty_detections, eval_data, weighted=True)
-            accuracy1 = contextual_accuracy(truth_anomalies, empty_detections, eval_data, weighted=True)
             
             print(f"   True Positives (TP): {tp1}")
             print(f"   False Positives (FP): {fp1}")
@@ -426,55 +526,43 @@ def main():
             print(f"   Precision: {precision1:.4f}")
             print(f"   Recall: {recall1:.4f}")
             print(f"   F1-Score: {f1_1:.4f}")
-            print(f"   Accuracy: {accuracy1:.4f}")
             
-            # Method 2: Segment-based Overlap Evaluation
-            print("\n🎯 Method 2: Segment-based Overlap Evaluation (weighted=False)")
-            tp2, fp2, fn2, tn2 = contextual_confusion_matrix(
+            # Method 2: Segment-based Non-weighted Evaluation
+            print("\n🎯 Method 2: Segment-based Non-weighted Evaluation (weighted=False)")
+            tn2, fp2, fn2, tp2 = contextual_confusion_matrix(
                 truth_anomalies, empty_detections, eval_data, weighted=False
             )
             precision2 = contextual_precision(truth_anomalies, empty_detections, eval_data, weighted=False)
             recall2 = contextual_recall(truth_anomalies, empty_detections, eval_data, weighted=False)
             f1_2 = contextual_f1_score(truth_anomalies, empty_detections, eval_data, weighted=False)
-            accuracy2 = contextual_accuracy(truth_anomalies, empty_detections, eval_data, weighted=False)
+            # Note: For segment-based evaluation, TN is None (not applicable in segment overlap analysis)
             
-            print(f"   True Positives (TP): {tp2}")
+            print(f"   True Positives (TP): {tp2 if tp2 is not None else 'N/A (segment-based)'}")
             print(f"   False Positives (FP): {fp2}")
             print(f"   False Negatives (FN): {fn2}")
-            print(f"   True Negatives (TN): {tn2}")
+            print(f"   True Negatives (TN): {tn2 if tn2 is not None else 'N/A (segment-based)'}")
             print(f"   Precision: {precision2:.4f}")
             print(f"   Recall: {recall2:.4f}")
             print(f"   F1-Score: {f1_2:.4f}")
-            print(f"   Accuracy: {accuracy2:.4f}")
-            
-            # Summary comparison for no detections
-            print("\n📈 === EVALUATION METHODS COMPARISON (No Detections) ===")
-            print(f"{'Metric':<12} {'Point-based':<12} {'Segment-based':<14} {'Difference':<12}")
-            print("-" * 52)
-            print(f"{'Precision':<12} {precision1:<12.4f} {precision2:<14.4f} {abs(precision1-precision2):<12.4f}")
-            print(f"{'Recall':<12} {recall1:<12.4f} {recall2:<14.4f} {abs(recall1-recall2):<12.4f}")
-            print(f"{'F1-Score':<12} {f1_1:<12.4f} {f1_2:<14.4f} {abs(f1_1-f1_2):<12.4f}")
-            print(f"{'Accuracy':<12} {accuracy1:<12.4f} {accuracy2:<14.4f} {abs(accuracy1-accuracy2):<12.4f}")
             
             # Store both sets of metrics
-            context['accuracy_metrics'] = {
+            context['evaluation_metrics'] = {
                 'point_based': {
                     'tp': tp1, 'fp': fp1, 'fn': fn1, 'tn': tn1,
-                    'precision': precision1, 'recall': recall1, 'f1': f1_1, 'accuracy': accuracy1
+                    'precision': precision1, 'recall': recall1, 'f1': f1_1
                 },
                 'segment_based': {
                     'tp': tp2, 'fp': fp2, 'fn': fn2, 'tn': tn2,
-                    'precision': precision2, 'recall': recall2, 'f1': f1_2, 'accuracy': accuracy2
+                    'precision': precision2, 'recall': recall2, 'f1': f1_2
                 }
             }
             
-            # Use segment-based metrics as primary for visualization
-            tp, fp, fn, tn = tp2, fp2, fn2, tn2
-            precision, recall, f1, accuracy = precision2, recall2, f1_2, accuracy2
+            # Use segment-based metrics as primary for visualization  
+            precision, recall, f1 = precision2, recall2, f1_2
         
     except Exception as e:
-        print(f"Accuracy calculation failed: {e}")
-        context['accuracy_metrics'] = None
+        print(f"Evaluation calculation failed: {e}")
+        context['evaluation_metrics'] = None
     
     # 5. Visualization
     print("\n5. Creating visualizations...")
@@ -485,8 +573,8 @@ def main():
     # Main plot
     plt.figure(figsize=(15, 12))
     
-    # Get accuracy metrics for title
-    f1_score = context.get('accuracy_metrics', {}).get('f1', 0) if context.get('accuracy_metrics') else 0
+    # Get F1 score for title
+    f1_score = context.get('evaluation_metrics', {}).get('segment_based', {}).get('f1', 0) if context.get('evaluation_metrics') else 0
     
     # Original plot
     plt.subplot(3, 1, 1)
@@ -519,18 +607,18 @@ def main():
     plt.grid(True, alpha=0.3)
     plt.ylabel('Value')
     
-    # Accuracy metrics visualization - Compare both methods
+    # Performance metrics visualization - Compare both methods
     plt.subplot(3, 1, 3)
-    if context.get('accuracy_metrics'):
-        metrics = context['accuracy_metrics']
+    if context.get('evaluation_metrics'):
+        metrics = context['evaluation_metrics']
         
         if 'point_based' in metrics and 'segment_based' in metrics:
             # Both evaluation methods available - show comparison
-            metric_names = ['Precision', 'Recall', 'F1-Score', 'Accuracy']
+            metric_names = ['Precision', 'Recall', 'F1-Score']
             point_values = [metrics['point_based']['precision'], metrics['point_based']['recall'], 
-                           metrics['point_based']['f1'], metrics['point_based']['accuracy']]
+                           metrics['point_based']['f1']]
             segment_values = [metrics['segment_based']['precision'], metrics['segment_based']['recall'], 
-                            metrics['segment_based']['f1'], metrics['segment_based']['accuracy']]
+                            metrics['segment_based']['f1']]
             
             x = range(len(metric_names))
             width = 0.35
@@ -559,10 +647,10 @@ def main():
             else:
                 m = metrics
             
-            metric_names = ['Precision', 'Recall', 'F1-Score', 'Accuracy']
-            metric_values = [m.get('precision', 0), m.get('recall', 0), m.get('f1', 0), m.get('accuracy', 0)]
+            metric_names = ['Precision', 'Recall', 'F1-Score']
+            metric_values = [m.get('precision', 0), m.get('recall', 0), m.get('f1', 0)]
             
-            bars = plt.bar(metric_names, metric_values, color=['blue', 'green', 'red', 'orange'])
+            bars = plt.bar(metric_names, metric_values, color=['blue', 'green', 'red'])
             plt.title('🚀 Optimized Mistral Detector Performance Metrics')
             plt.ylabel('Score')
             plt.ylim(0, 1)
@@ -572,7 +660,7 @@ def main():
                 plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
                         f'{value:.3f}', ha='center', va='bottom')
     else:
-        plt.text(0.5, 0.5, 'Accuracy metrics not available', 
+        plt.text(0.5, 0.5, 'Performance metrics not available', 
                 ha='center', va='center', transform=plt.gca().transAxes)
         plt.title('Performance Metrics')
     
@@ -585,46 +673,6 @@ def main():
     print(f"\n=== 🚀 OPTIMIZED Mistral Detector Pipeline (Together AI) execution completed! ===")
     print(f"⏱️  Total execution time: {total_time:.2f} seconds")
     
-    # Print final accuracy summary for both methods
-    if context.get('accuracy_metrics'):
-        metrics = context['accuracy_metrics']
-        print(f"\n=== 📊 Final Optimized Mistral Detector (Together AI) Accuracy Summary ===")
-        
-        if 'point_based' in metrics and 'segment_based' in metrics:
-            print("\n🔍 Point-based Weighted Evaluation:")
-            pb = metrics['point_based']
-            print(f"   F1-Score: {pb['f1']:.4f}")
-            print(f"   Precision: {pb['precision']:.4f}")
-            print(f"   Recall: {pb['recall']:.4f}")
-            print(f"   Accuracy: {pb['accuracy']:.4f}")
-            
-            print("\n🎯 Segment-based Overlap Evaluation (Recommended):")
-            sb = metrics['segment_based']
-            print(f"   F1-Score: {sb['f1']:.4f}")
-            print(f"   Precision: {sb['precision']:.4f}")
-            print(f"   Recall: {sb['recall']:.4f}")
-            print(f"   Accuracy: {sb['accuracy']:.4f}")
-            
-            print(f"\n💡 Evaluation Methods Difference:")
-            print(f"   F1-Score difference: {abs(pb['f1'] - sb['f1']):.4f}")
-            print(f"   Primary metric (Segment-based F1): {sb['f1']:.4f}")
-        else:
-            # Fallback for single method
-            if 'segment_based' in metrics:
-                m = metrics['segment_based']
-                method_name = "Segment-based"
-            else:
-                m = metrics
-                method_name = "Standard"
-            
-            print(f"\n{method_name} Evaluation Results:")
-            print(f"   F1-Score: {m.get('f1', 0):.4f}")
-            print(f"   Precision: {m.get('precision', 0):.4f}")
-            print(f"   Recall: {m.get('recall', 0):.4f}")
-            print(f"   Accuracy: {m.get('accuracy', 0):.4f}")
-    
-    print(f"\n🌐 API Usage Note: This run used OPTIMIZED Together AI API calls")
-    print(f"🚀 Performance improvements: Async/parallel processing, batch optimization")
     
     return context
 

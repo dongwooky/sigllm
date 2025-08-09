@@ -47,7 +47,22 @@ def aggregate_rolling_window(y, step_size=1, agg='median', remove_outliers=False
         ndarray:
             Flattened sequence.
     """
-    num_windows, num_samples, pred_length = y.shape
+    # Handle different input shapes
+    print(f"🔍 Debug: y.shape = {y.shape}")
+    
+    if len(y.shape) == 3:
+        # Expected 3D shape: (num_windows, num_samples, pred_length)
+        num_windows, num_samples, pred_length = y.shape
+    elif len(y.shape) == 2:
+        # Handle 2D shape: assume (num_windows, pred_length) with num_samples=1
+        num_windows, pred_length = y.shape
+        num_samples = 1
+        # Reshape to 3D
+        y = y.reshape(num_windows, num_samples, pred_length)
+        print(f"🔧 Reshaped y from 2D to 3D: {y.shape}")
+    else:
+        raise ValueError(f"Unexpected y.shape: {y.shape}. Expected 2D or 3D array.")
+    
     num_errors = pred_length + step_size * (num_windows - 1)
 
     if remove_outliers:
