@@ -97,14 +97,15 @@ def _get_pipeline_hyperparameter(hyperparameters, dataset_name, pipeline_name):
                 pipeline_path, pipeline_dirname + '_' + dataset_name.lower() + '.json'
             )
             if os.path.exists(file_path):
-                hyperparameters_ = json.load(file_path)
+                with open(file_path) as f:
+                    hyperparameters_ = json.load(f)
 
     return hyperparameters_
 
 
 def _augment_hyperparameters(hyperparameters, few_shot):
     hyperparameters_ = deepcopy(hyperparameters)
-    if few_shot:
+    if few_shot and hyperparameters:
         for hyperparameter, value in hyperparameters.items():
             if 'time_segments_aggregate' in hyperparameter:
                 name = hyperparameter[:-1]

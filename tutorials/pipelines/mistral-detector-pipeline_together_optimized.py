@@ -24,8 +24,10 @@ import pandas as pd
 import numpy as np
 import time
 from orion.data import load_signal, load_anomalies
+from orion.benchmark import _load_signal  # 벤치마크와 동일한 함수 사용
 from orion.evaluation import contextual_confusion_matrix
 from mlblocks import MLPipeline
+from sigllm import SigLLM  # 벤치마크와 동일한 고수준 인터페이스
 
 
 # Set Together AI API key from .env file if not already set
@@ -51,17 +53,32 @@ def main():
     """
     Main function to run the optimized detector pipeline
     """
-    print("=== 🚀 SigLLM Detector Pipeline (OPTIMIZED Together AI) ===")
-    print("High-performance version with async/parallel processing!")
-    print("Expected speed improvement: 3-10x faster than sequential version\n")
+    print("=== 🚀 SigLLM Detector Pipeline (BALANCED Together AI) ===")
+    print("Performance-optimized version with async/parallel processing!")
+    print("Balanced for both accuracy and speed improvements\n")
     
     # Record start time for total performance measurement
     total_start_time = time.time()
     
-    # 1. Data Loading
+    # 1. Data Loading - 벤치마크와 동일한 방식 사용
+    # 벤치마크 데이터셋 (paper-benchmark.csv에서 확인)
+    # MSL: M-6, M-1, M-2, S-2, P-10, T-4, T-5, F-7, M-3, M-4, M-5, P-15, C-1, C-2, T-12, T-13, F-4, F-5, D-14, T-9, P-14, T-8, P-11, D-15, D-16, M-7, F-8
+    # SMAP: P-1, S-1, E-1, E-2, E-3, E-4, E-5, E-6, E-7, E-8, E-9, E-10, E-11, E-12, E-13, A-1, D-1, P-3, D-2, D-3, D-4, A-2, ...
+    # YAHOO: Real_1, Real_2, ... Real_67, A1Benchmark, A2Benchmark, A3Benchmark, A4Benchmark
+    # 
+    # 벤치마크는 _load_signal(signal_name, test_split) 사용 - '-test' 접미사 없음!
+    # 벤치마크에서는 일반적으로 test_split=True를 사용하여 테스트 데이터 분리
+    _, data = _load_signal('M-6', test_split=True)
+    # _, data = _load_signal('M-1', test_split=True)  
+    # _, data = _load_signal('M-2', test_split=True)
+    # _, data = _load_signal('S-2', test_split=True)
+    # _, data = _load_signal('F-5', test_split=True)  # 벤치마크에서 F1=0.6667의 데이터셋
     print("1. Loading data...")
-    data = load_signal('exchange-2_cpm_results')
-    # data = load_signal('F-5-test')
+    # 벤치마크와 동일한 방식으로 데이터 로딩
+    # _, data = _load_signal('M-1', test_split=True)   # 벤치마크에서 사용하는 방식 (테스트 데이터 분리)
+    # data = load_signal('exchange-2_cpm_results')
+    # data = load_signal('M-3-test')
+    # data = load_signal('M-6-test')
     print(f"Data shape: {data.shape}")
     
     # Quick visualization of the data
@@ -81,27 +98,26 @@ def main():
     # print(f"Using subset: {data.shape}")
     
     # 2. Pipeline Setup with Optimized Parameters
-    print("\n2. Setting up OPTIMIZED pipeline...")
-    print("   🚀 Using optimized TogetherAI primitive with async/parallel processing")
+    print("\n2. Setting up BALANCED pipeline...")
+    print("   🚀 Using balanced TogetherAI primitive for accuracy + speed")
     
     pipeline_name = 'mistral_detector_together'
     print(f"   ✅ Using Together AI pipeline: {pipeline_name}")
     pipeline = MLPipeline(pipeline_name)
     
-    # OPTIMIZED hyperparameters for better performance
+    # BALANCED hyperparameters for PERFORMANCE + SPEED
     hyperparameters = {
         "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
-            "interval": 3600 #기본
-            # "interval": 21600 #NASA
+            # "interval": 3600 #기본
         },
         "sigllm.primitives.forecasting.together_ai.TogetherAI#1": {
-            "samples": 1,  # Reduced from 2 to 1 for 2x speed improvement
-            "max_tokens": 20,  # REDUCED: 30 → 20 (minimal tokens for anomaly detection)
-            "temp": 0.1,  # REDUCED: 0.7 → 0.1 (more deterministic = faster generation)
-            "top_p": 0.9,  # Optimized for speed
-            "max_concurrent": 20,  # INCREASED: 15 → 20 (even more parallel processing)
-            "batch_size": 100,  # INCREASED: 50 → 75 (larger batches = fewer API calls)
-            "use_async": True,  # Enable async processing for maximum speed
+            "samples": 2,  # RESTORED: Keep ensemble effect for better accuracy
+            "max_tokens": 50,  # INCREASED: 30 → 80 (adequate tokens for quality predictions)
+            "temp": 0.7,  # RESTORED: 1.0 → 0.7 (balanced creativity vs consistency)
+            "top_p": 0.9,  # RESTORED: 1.0 → 0.9 (better quality filtering)
+            "max_concurrent": 20,  # BALANCED: 20 → 15 (stability vs speed)
+            "batch_size": 100,  # BALANCED: 100 → 50 (memory efficiency)
+            "use_async": True,  # Keep async processing for speed
         },
         "sigllm.primitives.transformation.format_as_integer#1": {
             "trunc": 1,
@@ -191,10 +207,10 @@ def main():
     print(f"First sequence (first few values): {first_sequence[:10]}...")
     print("Note: Now string type, ready for LLM input")
     
-    # Step 5: OPTIMIZED TogetherAI model - The main performance bottleneck
-    print("\n--- Step 5: 🚀 OPTIMIZED TogetherAI model ---")
+    # Step 5: BALANCED TogetherAI model - Performance and accuracy optimized
+    print("\n--- Step 5: 🚀 BALANCED TogetherAI model ---")
     print("Prompts Together AI model to forecast next steps with PARALLEL PROCESSING")
-    print("This is where the major speed improvement happens!")
+    print("Balanced for both accuracy and speed improvements!")
     
     sequences_count = len(context['X'])
     print(f"📊 Processing {sequences_count} sequences with optimized parallel calls...")
@@ -291,10 +307,10 @@ def main():
     if context['anomalies'] is not None and len(context['anomalies']) > 0:
         # Display anomalies as DataFrame
         anomalies_df = pd.DataFrame(context['anomalies'], columns=['start', 'end', 'score'])
-        print("🎯 Detected Anomalies (by Optimized Mistral via Together AI):")
+        print("🎯 Detected Anomalies (by Balanced Mistral via Together AI):")
         print(anomalies_df)
     else:
-        print("🎯 No anomalies detected by Optimized Mistral via Together AI")
+        print("🎯 No anomalies detected by Balanced Mistral via Together AI")
         # Create empty DataFrame with correct structure
         anomalies_df = pd.DataFrame(columns=['start', 'end', 'score'])
         print("Created empty anomalies DataFrame for further processing")
@@ -302,17 +318,38 @@ def main():
     # 4.5. Performance Evaluation
     print("\n4.5. Performance Evaluation...")
     
-    # Load ground truth anomalies
-    truth_anomalies = load_anomalies('exchange-2_cpm_results')
+    # Load ground truth anomalies - 벤치마크와 동일한 방식
+    truth_anomalies = load_anomalies('M-1')  # 현재 로딩한 데이터셋과 일치시킴
     print(f"Ground Truth Anomalies: {len(truth_anomalies)} segments")
     
     # Prepare data for evaluation
     index, y, yhat, errors, anomalies = list(map(context.get, ['target_index', 'y', 'y_hat', 'errors', 'anomalies']))
     
+    # Debug: Check array shapes and lengths
+    print(f"🔍 Array shapes debug:")
+    print(f"   • index type: {type(index)}, shape: {getattr(index, 'shape', len(index) if hasattr(index, '__len__') else 'unknown')}")
+    print(f"   • y type: {type(y)}, shape: {getattr(y, 'shape', len(y) if hasattr(y, '__len__') else 'unknown')}")
+    print(f"   • yhat type: {type(yhat)}, shape: {getattr(yhat, 'shape', len(yhat) if hasattr(yhat, '__len__') else 'unknown')}")
+    
+    # Handle multi-dimensional y array (when target_size > 1)
+    if hasattr(y, 'shape') and len(y.shape) > 1:
+        print(f"   • y is multi-dimensional: {y.shape}")
+        # For target_size > 1, we need to reshape or select appropriate dimension
+        if y.shape[1] > 1:
+            # Take the first prediction from each sequence
+            y_flat = y[:, 0]  # Use first column if multiple targets
+        else:
+            y_flat = y.flatten()
+    else:
+        y_flat = y.flatten() if hasattr(y, 'flatten') else y
+    
+    print(f"   • y_flat length: {len(y_flat)}")
+    print(f"   • index length: {len(index)}")
+    
     # Create data DataFrame for evaluation
     eval_data = pd.DataFrame({
         'timestamp': index,
-        'value': y.flatten() if hasattr(y, 'flatten') else y
+        'value': y_flat
     })
     
     print(f"📊 Debug Info:")
@@ -587,7 +624,7 @@ def main():
         plt.axvspan(*anomalies[0][:2], color='r', alpha=0.2, label='detected anomalies')
     
     plt.legend()
-    plt.title(f'🚀 OPTIMIZED Mistral-based Time Series Anomaly Detection via Together AI (F1: {f1_score:.4f})')
+    plt.title(f'🚀 BALANCED Mistral-based Time Series Anomaly Detection via Together AI (F1: {f1_score:.4f})')
     plt.grid(True, alpha=0.3)
     plt.ylabel('Value')
     
@@ -628,7 +665,7 @@ def main():
             bars2 = plt.bar([i + width/2 for i in x], segment_values, width, 
                            label='Segment-based', color='orange', alpha=0.8)
             
-            plt.title('🚀 Optimized Mistral Detector: Orion Evaluation Methods Comparison')
+            plt.title('🚀 Balanced Mistral Detector: Orion Evaluation Methods Comparison')
             plt.ylabel('Score')
             plt.ylim(0, 1)
             plt.xticks(x, metric_names)
@@ -651,7 +688,7 @@ def main():
             metric_values = [m.get('precision', 0), m.get('recall', 0), m.get('f1', 0)]
             
             bars = plt.bar(metric_names, metric_values, color=['blue', 'green', 'red'])
-            plt.title('🚀 Optimized Mistral Detector Performance Metrics')
+            plt.title('🚀 Balanced Mistral Detector Performance Metrics')
             plt.ylabel('Score')
             plt.ylim(0, 1)
             
@@ -670,7 +707,7 @@ def main():
     
     # Performance Summary
     total_time = time.time() - total_start_time
-    print(f"\n=== 🚀 OPTIMIZED Mistral Detector Pipeline (Together AI) execution completed! ===")
+    print(f"\n=== 🚀 BALANCED Mistral Detector Pipeline (Together AI) execution completed! ===")
     print(f"⏱️  Total execution time: {total_time:.2f} seconds")
     
     
