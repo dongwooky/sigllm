@@ -1,0 +1,37 @@
+{
+    "mlstars.custom.timeseries_preprocessing.time_segments_aggregate#1": {
+        "interval": 21600
+    },
+    "sigllm.primitives.transformation.Float2Scalar#1": {
+        "decimal": 2,
+        "rescale": true
+    },
+    "sigllm.primitives.forecasting.custom.rolling_window_sequences#1": {
+        "target_column": 0,
+        "window_size": 140,
+        "target_size": 1
+    },
+    "sigllm.primitives.transformation.format_as_string#1": {
+        "space": false
+    },
+    "sigllm.primitives.forecasting.together_ai.TogetherAI#1": {
+        "name": "mistralai/Mistral-7B-Instruct-v0.2",
+        "steps": 5,
+        "samples": 3,
+        "max_tokens": 60,
+        "temp": 0.6,
+        "top_p": 0.85
+    },
+    "sigllm.primitives.transformation.format_as_integer#1": {
+        "trunc": 1,
+        "errors": "coerce"
+    },
+    "sigllm.primitives.postprocessing.aggregate_rolling_window#1": {
+        "agg": "median"
+    },
+    "orion.primitives.timeseries_anomalies.find_anomalies#1": {
+        "window_size_portion": 0.25,
+        "window_step_size_portion": 0.08,
+        "fixed_threshold": true
+    }
+}

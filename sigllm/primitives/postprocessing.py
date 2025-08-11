@@ -75,8 +75,19 @@ def aggregate_rolling_window(y, step_size=1, agg='median', remove_outliers=False
         intermediate = []
         for j in range(max(0, i - num_errors + pred_length), min(i + 1, pred_length)):
             for k in range(num_samples):
-                intermediate.append(y[i - j, k, j])
+                value = y[i - j, k, j]
+                # 스칼라 값으로 변환하여 균일한 형태 보장
+                if isinstance(value, (list, np.ndarray)):
+                    if len(value) > 0:
+                        intermediate.append(float(value[0]))
+                    else:
+                        intermediate.append(0.0)
+                else:
+                    intermediate.append(float(value))
 
-        signal.append(method(np.asarray(intermediate)))
+        if intermediate:  # 빈 리스트가 아닌 경우에만 처리
+            signal.append(method(np.asarray(intermediate, dtype=float)))
+        else:
+            signal.append(0.0)  # 기본값
 
     return np.array(signal)
