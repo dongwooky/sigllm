@@ -199,7 +199,7 @@ def main():
     # YAHOO: Real_1, Real_2, ... Real_67, A1Benchmark, A2Benchmark, A3Benchmark, A4Benchmark
     # 
     # 1. 데이터셋 및 파이프라인 설정
-    signal_name = 'M-2'  # 벤치마크 데이터셋
+    signal_name = 'M-6'  # 벤치마크 데이터셋
     dataset_name = 'MSL'  # 데이터셋 이름
     pipeline_name = 'mistral_detector_together'
     few_shot = False  # Few-shot 학습 여부 (1shot 파이프라인이면 True)

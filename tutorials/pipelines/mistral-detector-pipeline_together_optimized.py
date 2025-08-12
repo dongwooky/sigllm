@@ -68,9 +68,9 @@ def main():
     # 
     # 벤치마크는 _load_signal(signal_name, test_split) 사용 - '-test' 접미사 없음!
     # 벤치마크에서는 일반적으로 test_split=True를 사용하여 테스트 데이터 분리
-    _, data = _load_signal('M-6', test_split=True)
+    # _, data = _load_signal('M-6', test_split=True)
     # _, data = _load_signal('M-1', test_split=True)  
-    # _, data = _load_signal('M-2', test_split=True)
+    _, data = _load_signal('M-2', test_split=True)
     # _, data = _load_signal('S-2', test_split=True)
     # _, data = _load_signal('F-5', test_split=True)  # 벤치마크에서 F1=0.6667의 데이터셋
     print("1. Loading data...")
